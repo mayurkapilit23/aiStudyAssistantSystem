@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # Service 1: The Postgres Database
+
+  # This is the internal name of the service inside the Docker Compose environment.
+  # You can name this anything you want (like my-database or db), but rag-postgres-db is clear and descriptive.
+  rag-postgres-db:
+    #    This tells Docker exactly which official pre-made package to download from Docker Hub.
+    image: postgres:latest
+
+    # This gives the actual running container a specific, friendly name on your computer.
+    # If you run docker ps in your terminal, you will see this container listed cleanly as rag_postgres_container instead of Docker generating a random, weird name like focused_bell
+    container_name: rag_postgres_container
+
+    # These are environment variables passed inside the container.
+    # The official Postgres image is programmed to look for these specific keys on its first boot.
+    # It reads them and automatically creates a root user named mayur, sets their password to mayur, and provisions a blank database named ragdb
+    environment:
+      POSTGRES_USER: mayur
+      POSTGRES_PASSWORD: mayur
+      POSTGRES_DB: ragdb
+    # This opens a gateway between the container and your actual physical computer, formatted as "HOST_PORT : CONTAINER_PORT"
+    ports:
+      - "5432:5432"
+    # By default, Docker containers are temporary; if you delete a container, all your database data is wiped out.
+    # This line maps a persistent storage folder (a "volume") named rag_postgres_data to the exact folder inside the container where Postgres saves its actual data files (/var/lib/postgresql/data).
+    volumes:
+      - rag_postgres_data:/var/lib/postgresql
+
+#  # Service 2: Your Spring Boot Application
+
+#  spring-app:
+#    build: . # This tells Compose to look for the Dockerfile in the current directory
+#    container_name: spring_app_container
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      - postgres-db # Ensures Postgres starts before your app tries to connect
+#    environment:
+#      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/mydb
+#      - SPRING_DATASOURCE_USERNAME=myuser
+#      - SPRING_DATASOURCE_PASSWORD=mypassword
+
+
+# This block sits at the very bottom of the file (unindented) to globally declare the rag_postgres_data volume.
+# It tells Docker: "Hey, create a permanent slice of managed hard drive space on this computer named rag_postgres_data so my database files stay safe even when the container stops."
+volumes:
+  rag_postgres_data:
