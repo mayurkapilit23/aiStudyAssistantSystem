@@ -31,6 +31,9 @@ public class Document {
 
     @OneToOne(mappedBy = "document", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private DocumentContent documentContent;
+
+    @Column(nullable = false, unique = true)
+    private String fileHash;
 }
 
 

@@ -5,12 +5,15 @@ import com.example.aistudyassistantsystem.features.document.dto.DocumentUploadRe
 import com.example.aistudyassistantsystem.features.document.entity.Document;
 import com.example.aistudyassistantsystem.features.document.repository.DocumentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.print.Doc;
 import java.io.File;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +21,7 @@ import java.util.UUID;
 
 import static org.springframework.boot.logging.logback.RollingPolicySystemProperty.MAX_FILE_SIZE;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DocumentServiceImpl implements DocumentService {
@@ -75,9 +79,9 @@ public class DocumentServiceImpl implements DocumentService {
     }
 
 
-    private void validateDuplicateFile(String originalFileName) {
-        if (documentRepository.existsByFileName(originalFileName)) {
-            throw new FileUploadException("File already exists with the name: " + originalFileName);
+    private void validateDuplicateFile(String fileHash) {
+        if (documentRepository.existsByFileHash(fileHash)) {
+            throw new FileUploadException("File already exists");
         }
     }
 
@@ -87,11 +91,14 @@ public class DocumentServiceImpl implements DocumentService {
         // Apply validations
         validateMultipartFile(file);
 
+        String fileHash = generateSHA256Hash(file);
+
         String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
-        validateDuplicateFile(originalFileName);
+        validateDuplicateFile(fileHash);
         try {
 
             String uploadDir = System.getProperty("user.dir") + "/" + UPLOAD_DIR;
+            log.info("Uploading file: {} to {}", originalFileName, uploadDir);
             File directory = new File(uploadDir);
             if (!directory.exists()) {
                 directory.mkdirs();
@@ -106,6 +113,7 @@ public class DocumentServiceImpl implements DocumentService {
             document.setFileType(file.getContentType());
             document.setFileSize(file.getSize());
             document.setFilePath(filePath);
+            document.setFileHash(fileHash);
             document.setUploadedAt(LocalDateTime.now());
             Document savedFile = documentRepository.save(document);
             return mapToResponseDto(savedFile);
@@ -132,16 +140,17 @@ public class DocumentServiceImpl implements DocumentService {
             if (file.isEmpty()) {
                 continue;
             }
-
+            String fileHash = generateSHA256Hash(file);
 
             // Validates constraints for every individual loop item
             validateMultipartFile(file);
             String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
-            validateDuplicateFile(originalFileName);
+            validateDuplicateFile(fileHash);
 
             try {
 
                 String uploadDir = System.getProperty("user.dir") + "/" + UPLOAD_DIR;
+                log.info("Uploading file: {} to {}", originalFileName, uploadDir);
                 File directory = new File(uploadDir);
                 if (!directory.exists()) {
                     directory.mkdirs();
@@ -156,6 +165,7 @@ public class DocumentServiceImpl implements DocumentService {
                 document.setFileType(file.getContentType());
                 document.setFileSize(file.getSize());
                 document.setFilePath(filePath);
+                document.setFileHash(fileHash);
                 document.setUploadedAt(LocalDateTime.now());
 
                 Document savedFile = documentRepository.save(document);
@@ -179,6 +189,25 @@ public class DocumentServiceImpl implements DocumentService {
     // Helper method to keep mapping DRY (Don't Repeat Yourself)
     private DocumentUploadResponseDto mapToResponseDto(Document document) {
         return DocumentUploadResponseDto.builder().id(document.getId()).fileName(document.getFileName()).fileType(document.getFileType()).fileSize(document.getFileSize()).filePath(document.getFilePath()).build();
+    }
+
+    //Helper method to generate fileHash (SHA-256)
+    private String generateSHA256Hash(MultipartFile file) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(file.getBytes());
+
+            // Convert byte array into Hex string
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException | IOException e) {
+            throw new FileUploadException("Failed to process file checksum: " + e.getMessage());
+        }
     }
 }
 
